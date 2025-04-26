@@ -1,4 +1,3 @@
-
 import React from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import StatCard from '@/components/dashboard/StatCard';
@@ -18,11 +17,28 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from "@/integrations/supabase/client";
 
 const InventoryReport = () => {
   const [category, setCategory] = React.useState('all');
   const [sortBy, setSortBy] = React.useState('name');
   const { toast } = useToast();
+
+  const { data: inventoryData, isLoading } = useQuery({
+    queryKey: ['inventory'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('inventory')
+        .select(`
+          *,
+          product:products(*)
+        `);
+      
+      if (error) throw error;
+      return data;
+    }
+  });
 
   const handleExport = (format: string) => {
     toast({
@@ -31,130 +47,34 @@ const InventoryReport = () => {
     });
   };
 
-  const inventoryItems = [
-    { 
-      id: 1, 
-      name: "Apples", 
-      category: "Fruits", 
-      stock: 120, 
-      capacity: 150, 
-      threshold: 30,
-      expiryDate: "2025-05-10",
-      supplier: "Organic Farms Inc."
-    },
-    { 
-      id: 2, 
-      name: "Bananas", 
-      category: "Fruits", 
-      stock: 80, 
-      capacity: 100, 
-      threshold: 20,
-      expiryDate: "2025-05-03",
-      supplier: "Tropical Imports Ltd."
-    },
-    { 
-      id: 3, 
-      name: "Oranges", 
-      category: "Fruits", 
-      stock: 40, 
-      capacity: 100, 
-      threshold: 25,
-      expiryDate: "2025-05-15",
-      supplier: "Citrus Growers Co."
-    },
-    { 
-      id: 4, 
-      name: "Almonds", 
-      category: "Nuts", 
-      stock: 90, 
-      capacity: 120, 
-      threshold: 30,
-      expiryDate: "2025-08-20",
-      supplier: "Nutty Harvests"
-    },
-    { 
-      id: 5, 
-      name: "Mixed Berries", 
-      category: "Fruits", 
-      stock: 15, 
-      capacity: 80, 
-      threshold: 20,
-      expiryDate: "2025-05-05",
-      supplier: "Berry Farms Co."
-    },
-    { 
-      id: 6, 
-      name: "Walnuts", 
-      category: "Nuts", 
-      stock: 75, 
-      capacity: 100, 
-      threshold: 25,
-      expiryDate: "2025-09-15",
-      supplier: "Nutty Harvests"
-    },
-    { 
-      id: 7, 
-      name: "Caesar Salad Kit", 
-      category: "Salads", 
-      stock: 25, 
-      capacity: 50, 
-      threshold: 15,
-      expiryDate: "2025-05-02",
-      supplier: "Fresh Greens Inc."
-    },
-    { 
-      id: 8, 
-      name: "Greek Salad Kit", 
-      category: "Salads", 
-      stock: 18, 
-      capacity: 50, 
-      threshold: 15,
-      expiryDate: "2025-05-01",
-      supplier: "Fresh Greens Inc."
-    },
-    { 
-      id: 9, 
-      name: "Cashews", 
-      category: "Nuts", 
-      stock: 60, 
-      capacity: 80, 
-      threshold: 20,
-      expiryDate: "2025-08-30",
-      supplier: "Premium Nuts Co."
-    },
-    { 
-      id: 10, 
-      name: "Mangoes", 
-      category: "Fruits", 
-      stock: 30, 
-      capacity: 80, 
-      threshold: 15,
-      expiryDate: "2025-05-07",
-      supplier: "Tropical Imports Ltd."
-    },
-  ];
-
-  // Filter inventory items based on category
   const filteredItems = React.useMemo(() => {
-    if (category === 'all') return inventoryItems;
-    return inventoryItems.filter(item => item.category.toLowerCase() === category);
-  }, [category, inventoryItems]);
+    if (!inventoryData) return [];
+    if (category === 'all') return inventoryData;
+    return inventoryData.filter(item => item.product.category.toLowerCase() === category);
+  }, [category, inventoryData]);
 
-  // Sort inventory items
   const sortedItems = React.useMemo(() => {
     return [...filteredItems].sort((a, b) => {
-      if (sortBy === 'name') return a.name.localeCompare(b.name);
-      if (sortBy === 'stockLow') return a.stock - b.stock;
-      if (sortBy === 'stockHigh') return b.stock - a.stock;
-      if (sortBy === 'expiry') return new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime();
+      if (sortBy === 'name') return a.product.name.localeCompare(b.product.name);
+      if (sortBy === 'stockLow') return a.quantity - b.quantity;
+      if (sortBy === 'stockHigh') return b.quantity - a.quantity;
       return 0;
     });
   }, [filteredItems, sortBy]);
 
+  if (isLoading) {
+    return (
+      <DashboardLayout title="Inventory Insights">
+        <div className="flex items-center justify-center h-96">
+          Loading inventory data...
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout title="Inventory Insights">
       <div className="grid gap-6">
-        {/* Stats Overview */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatCard
             title="Total Items in Stock"
@@ -244,7 +164,6 @@ const InventoryReport = () => {
           />
         </div>
 
-        {/* Controls */}
         <Card>
           <CardContent className="p-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -309,10 +228,8 @@ const InventoryReport = () => {
           </CardContent>
         </Card>
 
-        {/* Charts */}
         <InventoryChart />
         
-        {/* Category Distribution */}
         <Card>
           <CardHeader>
             <CardTitle>Inventory Distribution by Category</CardTitle>
@@ -353,7 +270,6 @@ const InventoryReport = () => {
           </CardContent>
         </Card>
 
-        {/* Inventory Items Table */}
         <Card>
           <CardHeader>
             <CardTitle>Inventory Items</CardTitle>
@@ -366,33 +282,34 @@ const InventoryReport = () => {
                   <TableHead>Category</TableHead>
                   <TableHead>Stock Level</TableHead>
                   <TableHead>Expiry Date</TableHead>
-                  <TableHead>Supplier</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {sortedItems.map((item) => (
                   <TableRow key={item.id}>
-                    <TableCell className="font-medium">{item.name}</TableCell>
-                    <TableCell>{item.category}</TableCell>
+                    <TableCell className="font-medium">{item.product.name}</TableCell>
+                    <TableCell>{item.product.category}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <div className="w-24">
                           <Progress 
-                            value={(item.stock / item.capacity) * 100} 
-                            className="h-2"
-                            indicator={item.stock <= item.threshold ? "bg-red-500" : undefined}
+                            value={(item.quantity / 100) * 100}
+                            className={`h-2 ${
+                              item.quantity <= item.threshold 
+                                ? '[&>div]:bg-red-500' 
+                                : ''
+                            }`}
                           />
                         </div>
-                        <span className="text-sm">{item.stock}/{item.capacity}</span>
+                        <span className="text-sm">{item.quantity}/100</span>
                       </div>
                     </TableCell>
-                    <TableCell>{item.expiryDate}</TableCell>
-                    <TableCell>{item.supplier}</TableCell>
+                    <TableCell>{item.expiry_date}</TableCell>
                     <TableCell>
-                      {item.stock <= item.threshold ? (
+                      {item.quantity <= item.threshold ? (
                         <Badge className="bg-red-500">Low Stock</Badge>
-                      ) : new Date(item.expiryDate) <= new Date(Date.now() + 5 * 24 * 60 * 60 * 1000) ? (
+                      ) : new Date(item.expiry_date) <= new Date(Date.now() + 5 * 24 * 60 * 60 * 1000) ? (
                         <Badge className="bg-amber-500">Expiring Soon</Badge>
                       ) : (
                         <Badge className="bg-fruitbox-green">Good</Badge>
